@@ -1,0 +1,38 @@
+📈 Bot de Trading Assíncrono Binance (Python)
+Este projeto é um bot de trading automático para a Binance, desenvolvido em Python com execução assíncrona e análise em tempo real via WebSocket.
+
+Ele utiliza os indicadores técnicos RSI (Índice de Força Relativa) e Williams %R para identificar oportunidades de compra e venda no mercado de criptomoedas.
+
+🚀 Funcionalidades
+📡 Análise de preços em tempo real usando WebSocket.
+
+📈 Cálculo automático dos indicadores RSI e Williams %R.
+
+🛒 Execução de ordens de mercado (compra e venda) com base nos sinais dos indicadores.
+
+💸 Controle de saldo e gerenciamento de investimentos por trade.
+
+🔄 Reconexão automática em caso de falhas na conexão com a Binance.
+
+🧪 Suporte a Testnet para testes sem riscos financeiros.
+
+⚙️ Configurações Rápidas
+USE_TESTNET: Defina como True para usar a rede de testes da Binance.
+
+API_KEY e API_SECRET: Insira suas credenciais da Binance ou Testnet.
+
+SIMBOLOS: Defina a lista de criptomoedas que o bot irá monitorar (ex: ["BTCUSDT", "ETHUSDT"]).
+
+VALOR_DISPONIVEL: Saldo simulado disponível para operações.
+
+INVESTIMENTO_POR_TRADE: Valor por trade a ser utilizado.
+
+🛠️ Tecnologias Utilizadas
+Python 3.10+
+
+binance (API oficial)
+
+pandas
+
+asyncio
+
