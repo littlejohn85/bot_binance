@@ -1,18 +1,20 @@
+
 import asyncio
 from binance import AsyncClient, BinanceSocketManager
 import pandas as pd
 import sys
 from binance.enums import *
-import time
+
+
 
 if sys.platform.startswith('win'):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 # Configurações
 USE_TESTNET = True
-API_KEY = "sua api_kei"
-API_SECRET = "sua api_secret"
-SIMBOLOS = ["PEPEUSDT"]
+API_KEY = "nmHuCI7POpB9BU9N2gwbdgSQMvEwzHq6dJIZ6O3sg0KC1sGWySZVA7BZ0vhcLV12"
+API_SECRET = "KY58xKuKKG0cQBXAVAdTqfXGSKZOScXrOq4Nm8MeKTjkGRuR0vu8f5ZXnpP7n8dM"
+SIMBOLOS = ["BMTUSDT"]
 VALOR_DISPONIVEL = 10
 INVESTIMENTO_POR_TRADE = 10
 
@@ -42,13 +44,13 @@ def calcular_indicadores(df):
 
     return int(ultimo_rsi), int(ultimo_wr)
 
-# Estratégia de entrada e saída com delay
+# Estratégia de entrada e saída
 def verificar_sinais(symbol, rsi, wr):
     if rsi is None or wr is None:
         return "AGUARDANDO"
     
     # Comprar se ao menos um indicar sobrevenda
-    if symbol not in POSITIVO and (rsi <= 30 or wr <= -80):
+    if symbol not in POSITIVO and (rsi <= 30 or wr <= -80 ):
         return "COMPRAR"
 
     # Vender se ao menos um indicar sobrecompra
@@ -56,12 +58,6 @@ def verificar_sinais(symbol, rsi, wr):
         return "VENDER"
 
     return "MANTER"
-
-# Função de Delay (espaçamento antes de ações de compra/venda)
-def delay_antes_acao(tipo_acao):
-    tempo_delay = 10  # tempo em segundos para o delay
-    print(f"Aguardando {tempo_delay} segundos antes de {tipo_acao}...")
-    time.sleep(tempo_delay)
 
 # Processa dados em tempo real
 async def process_message(msg, client):
@@ -83,10 +79,8 @@ async def process_message(msg, client):
     print(f"[{symbol}] Preço: {close_price:.4f} | RSI: {rsi} | WR: {wr} | Ação: {acao} | Saldo: {VALOR_DISPONIVEL:.2f}")
 
     if acao == "COMPRAR" and VALOR_DISPONIVEL >= INVESTIMENTO_POR_TRADE:
-        delay_antes_acao("compra")
         await executar_ordem(client, symbol, "BUY")
     elif acao == "VENDER" and symbol in POSITIVO:
-        delay_antes_acao("venda")
         await executar_ordem(client, symbol, "SELL")
 
 # Executa compra ou venda real
