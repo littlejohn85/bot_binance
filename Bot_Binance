@@ -1,0 +1,149 @@
+import asyncio
+from binance import AsyncClient, BinanceSocketManager
+import pandas as pd
+import sys
+from binance.enums import *
+import time
+
+if sys.platform.startswith('win'):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+# Configurações
+USE_TESTNET = True
+API_KEY = "sua api_kei"
+API_SECRET = "sua api_secret"
+SIMBOLOS = ["PEPEUSDT"]
+VALOR_DISPONIVEL = 10
+INVESTIMENTO_POR_TRADE = 10
+
+HISTORICO_PRECOS = {s: pd.DataFrame(columns=["close", "high", "low"]) for s in SIMBOLOS}
+POSITIVO = {}
+
+# Indicadores técnicos
+def calcular_indicadores(df):
+    if len(df) < 14:
+        return None, None
+
+    delta = df['close'].diff()
+    ganho = delta.clip(lower=0).rolling(window=14).mean()
+    perda = -delta.clip(upper=0).rolling(window=14).mean()
+    rs = ganho / perda.replace(0, 1e-6)
+    rsi = 100 - (100 / (1 + rs))
+
+    max_high = df['high'].rolling(14).max()
+    min_low = df['low'].rolling(14).min()
+    wr = ((max_high - df['close']) / (max_high - min_low).replace(0, 1e-6)) * -100
+
+    ultimo_rsi = rsi.iloc[-1]
+    ultimo_wr = wr.iloc[-1]
+
+    if pd.isna(ultimo_rsi) or pd.isna(ultimo_wr):
+        return None, None
+
+    return int(ultimo_rsi), int(ultimo_wr)
+
+# Estratégia de entrada e saída com delay
+def verificar_sinais(symbol, rsi, wr):
+    if rsi is None or wr is None:
+        return "AGUARDANDO"
+    
+    # Comprar se ao menos um indicar sobrevenda
+    if symbol not in POSITIVO and (rsi <= 30 or wr <= -80):
+        return "COMPRAR"
+
+    # Vender se ao menos um indicar sobrecompra
+    elif symbol in POSITIVO and (rsi >= 70 or wr >= -20):
+        return "VENDER"
+
+    return "MANTER"
+
+# Função de Delay (espaçamento antes de ações de compra/venda)
+def delay_antes_acao(tipo_acao):
+    tempo_delay = 10  # tempo em segundos para o delay
+    print(f"Aguardando {tempo_delay} segundos antes de {tipo_acao}...")
+    time.sleep(tempo_delay)
+
+# Processa dados em tempo real
+async def process_message(msg, client):
+    if not isinstance(msg, dict) or 's' not in msg:
+        print("⚠️ Mensagem inválida:", msg)
+        return
+
+    symbol = msg['s']
+    close_price = float(msg['c'])
+    high_price = float(msg['h'])
+    low_price = float(msg['l'])
+
+    novo = pd.DataFrame([{'close': close_price, 'high': high_price, 'low': low_price}])
+    HISTORICO_PRECOS[symbol] = pd.concat([HISTORICO_PRECOS[symbol], novo], ignore_index=True).tail(100)
+
+    rsi, wr = calcular_indicadores(HISTORICO_PRECOS[symbol])
+    acao = verificar_sinais(symbol, rsi, wr)
+
+    print(f"[{symbol}] Preço: {close_price:.4f} | RSI: {rsi} | WR: {wr} | Ação: {acao} | Saldo: {VALOR_DISPONIVEL:.2f}")
+
+    if acao == "COMPRAR" and VALOR_DISPONIVEL >= INVESTIMENTO_POR_TRADE:
+        delay_antes_acao("compra")
+        await executar_ordem(client, symbol, "BUY")
+    elif acao == "VENDER" and symbol in POSITIVO:
+        delay_antes_acao("venda")
+        await executar_ordem(client, symbol, "SELL")
+
+# Executa compra ou venda real
+async def executar_ordem(client, symbol, side):
+    global VALOR_DISPONIVEL, POSITIVO
+
+    try:
+        if side == "BUY":
+            ordem = await client.create_order(
+                symbol=symbol,
+                side=SIDE_BUY,
+                type=ORDER_TYPE_MARKET,
+                quoteOrderQty=INVESTIMENTO_POR_TRADE
+            )
+            preco = float(ordem['fills'][0]['price'])
+            qtd = float(ordem['executedQty'])
+            POSITIVO[symbol] = {'preco': preco, 'qtd': qtd}
+            VALOR_DISPONIVEL -= INVESTIMENTO_POR_TRADE
+            print(f"✅ COMPRA EXECUTADA: {symbol} a {preco:.4f} | Qtd: {qtd:.4f}")
+
+        elif side == "SELL" and symbol in POSITIVO:
+            qtd = POSITIVO[symbol]['qtd']
+            preco_compra = POSITIVO[symbol]['preco']
+            ordem = await client.create_order(
+                symbol=symbol,
+                side=SIDE_SELL,
+                type=ORDER_TYPE_MARKET,
+                quantity=round(qtd, 4)
+            )
+            preco_venda = float(ordem['fills'][0]['price'])
+            lucro = ((preco_venda - preco_compra) / preco_compra) * INVESTIMENTO_POR_TRADE
+            VALOR_DISPONIVEL += INVESTIMENTO_POR_TRADE + lucro
+            POSITIVO.pop(symbol)
+            print(f"✅ VENDA EXECUTADA: {symbol} a {preco_venda:.4f} | Lucro: {lucro:.2f} | Novo saldo: {VALOR_DISPONIVEL:.2f}")
+
+    except Exception as e:
+        print(f"❌ Erro ao executar ordem {side} para {symbol}: {e}")
+
+# WebSocket por símbolo
+async def gerenciar_socket(client, symbol):
+    bm = BinanceSocketManager(client)
+    while True:
+        try:
+            async with bm.symbol_ticker_socket(symbol) as stream:
+                while True:
+                    msg = await stream.recv()
+                    await process_message(msg, client)
+
+        except Exception as e:
+            print(f"🚨 Erro WebSocket {symbol}: {e}. Tentando reconectar em 5s...")
+            await asyncio.sleep(5)
+
+# Inicializa o bot
+async def main():
+    client = await AsyncClient.create(API_KEY, API_SECRET)
+    tarefas = [gerenciar_socket(client, s) for s in SIMBOLOS]
+    await asyncio.gather(*tarefas)
+
+if __name__ == "__main__":
+    asyncio.run(main())
