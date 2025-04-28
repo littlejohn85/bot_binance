@@ -12,8 +12,8 @@ if sys.platform.startswith('win'):
 
 # Configurações
 USE_TESTNET = True
-API_KEY = "nmHuCI7POpB9BU9N2gwbdgSQMvEwzHq6dJIZ6O3sg0KC1sGWySZVA7BZ0vhcLV12"
-API_SECRET = "KY58xKuKKG0cQBXAVAdTqfXGSKZOScXrOq4Nm8MeKTjkGRuR0vu8f5ZXnpP7n8dM"
+API_KEY = "sua api kei"
+API_SECRET = "sua api secret"
 SIMBOLOS = ["BMTUSDT"]
 VALOR_DISPONIVEL = 10
 INVESTIMENTO_POR_TRADE = 10
